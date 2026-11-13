@@ -1,0 +1,13 @@
+# Secrets and local state: never commit these
+.env
+.lab/
+*.dump
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/

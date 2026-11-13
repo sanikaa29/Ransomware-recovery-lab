@@ -1,0 +1,72 @@
+name: ransomware-recovery-lab
+
+# Every published port is bound to 127.0.0.1 only. Credentials come from .env
+# (created by `make setup`); compose refuses to start without them.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${PG_USER:?run 'make setup' first}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?run 'make setup' first}
+      POSTGRES_DB: ${PG_DB:-shopdb}
+    ports:
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  postgres_restore:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${PG_USER:?run 'make setup' first}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?run 'make setup' first}
+      # The restore step drops and recreates ${RESTORE_PG_DB:-shopdb_restored} itself.
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:${RESTORE_PG_PORT:-5433}:5432"
+    volumes:
+      - pg_restore_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  vault:
+    # TODO(phase 2): pin to the exact tag verified with `weed version`.
+    image: chrislusf/seaweedfs@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0  # 'latest' on 2026-11-12 (weed 4.53); pinned so results are repeatable
+    # Flag names below come from the SeaweedFS wiki; verify with `weed server -h` in phase 2.
+    command:
+      - server
+      - -s3
+      - -dir=/data
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -master.volumeSizeLimitMB=64
+      - -volume.max=100
+    ports:
+      # Only the S3 API is published; master/volume/filer ports stay inside the container.
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - vault_data:/data
+      # Config file (not data), rendered by `make setup`; needs to exist before `up`.
+      - ./.lab/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      # Master status endpoint on the internal port 9333. Unverified until run against the image.
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9333/cluster/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  pg_data:
+  pg_restore_data:
+  vault_data:

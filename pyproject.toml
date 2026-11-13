@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ransomware-recovery-lab"
+version = "0.1.0"
+description = "Local, zero-cost lab: ransomware hits a database, immutable backups survive, recovery skips a poisoned backup."
+requires-python = ">=3.11"
+# All pins resolved with `make setup` on macOS / Python 3.14 (see Phase 1 run).
+dependencies = [
+  "typer==0.12.5",
+  "click==8.1.8",  # typer 0.12.5 mis-handles bool flags on click 8.5.x (lab health ran with --restore)
+  "rich==13.9.4",
+  "boto3==1.35.36",
+  "psycopg[binary]==3.2.13",  # 3.2.3 has no wheel for Python 3.14
+  "Faker==30.3.0",
+  "cryptography==50.0.1",  # (v)
+  "matplotlib==3.11.2",    # (v)
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",         # (v)
+  "moto[s3]==5.0.18",
+  "ruff==0.16.9",          # (v)
+]
+
+[project.scripts]
+lab = "lab.cli:app"
+
+[tool.setuptools]
+packages = ["lab"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not integration'"
+markers = [
+  "integration: needs the docker compose stack running (run with: pytest -m integration)",
+]
+filterwarnings = [
+  # botocore 1.35 calls datetime.utcnow(), deprecated in Python 3.12+; harmless, not our code.
+  "ignore:datetime.datetime.utcnow\\(\\) is deprecated:DeprecationWarning:botocore",
+]
